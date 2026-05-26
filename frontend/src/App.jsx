@@ -8,24 +8,62 @@ function App() {
   const [goals, setGoals] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
 
+  const [loginInput, setLoginInput] = useState("");
+  const [currentUser, setCurrentUser] = useState("");
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+
   async function loadGoals() {
-    const response = await fetch(`${API_BASE}/goals`);
+    if (!isLoggedIn || currentUser === "") return;
+
+    const response = await fetch(`${API_BASE}/goals/${currentUser}`);
     const data = await response.json();
-    console.log(data);
     setGoals(data);
   }
 
   useEffect(() => {
-    loadGoals();
-  }, []);
+    if (isLoggedIn && currentUser !== "") {
+      loadGoals();
+    }
+  }, [isLoggedIn, currentUser]);
 
-  async function addGoal() {
-    if (goalText.trim() === "") {
-      setMessage("Please type a goal first.");
+  function loginUser() {
+    const cleanUsername = loginInput.trim().toLowerCase();
+
+    if (cleanUsername === "") {
+      setMessage("[ Please enter a username ]");
       return;
     }
 
-    const response = await fetch(`${API_BASE}/goals`, {
+    setCurrentUser(cleanUsername);
+    setIsLoggedIn(true);
+    setShowLogin(false);
+    setGoalText("");
+    setEditingIndex(null);
+    setMessage(`[ Logged in successfully ]`);
+  }
+
+  function logoutUser() {
+    setCurrentUser("");
+    setIsLoggedIn(false);
+    setGoals([]);
+    setGoalText("");
+    setEditingIndex(null);
+    setMessage("[ Logged out ]");
+  }
+
+  async function addGoal() {
+    if (!isLoggedIn) {
+      setMessage("[ Please log in first ]");
+      return;
+    }
+
+    if (goalText.trim() === "") {
+      setMessage("[ Please type a goal first ]");
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/goals/${currentUser}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -37,27 +75,17 @@ function App() {
 
     const data = await response.json();
     setMessage(data.message);
-
-    setTimeout(() => {
-      setMessage("");
-    }, 3000);
-    
     setGoalText("");
-    await loadGoals(); // Refresh the goals list
+    await loadGoals();
   }
 
   async function deleteGoal(index) {
-    const response = await fetch(`${API_BASE}/goals/${index}`, {
+    const response = await fetch(`${API_BASE}/goals/${currentUser}/${index}`, {
       method: "DELETE",
     });
 
     const data = await response.json();
     setMessage(data.message);
-
-    setTimeout(() => {
-      setMessage("");
-    }, 3000);
-
     await loadGoals();
   }
 
@@ -68,11 +96,11 @@ function App() {
 
   async function updateGoal() {
     if (goalText.trim() === "") {
-      setMessage("Goal cannot be empty.");
+      setMessage("[ Goal cannot be empty ]");
       return;
     }
 
-    const response = await fetch(`${API_BASE}/goals/${editingIndex}`, {
+    const response = await fetch(`${API_BASE}/goals/${currentUser}/${editingIndex}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -95,12 +123,49 @@ function App() {
   }
 
   return (
-    <div>
+    <div className="app-card">
+      <img
+        src="/profile-icon.png"
+        alt="Profile"
+        className="profile-icon"
+        onClick={() => setShowLogin(true)}
+      />
+
+      {showLogin && (
+        <div className="modal-overlay">
+          <div className="login-modal">
+            <button className="close-button" onClick={() => setShowLogin(false)}>
+              ×
+            </button>
+
+            <h2>Login</h2>
+
+            <input
+              type="text"
+              placeholder="Enter username"
+              value={loginInput}
+              onChange={(event) => setLoginInput(event.target.value)}
+            />
+
+            <button onClick={loginUser}>Login</button>
+          </div>
+        </div>
+      )}
+
       <h1>Goal Tracker</h1>
 
       <p className="subtitle">
         Add, edit, and delete your goals as you build better habits.
       </p>
+
+      {isLoggedIn ? (
+        <div className="user-row">
+          <p className="logged-in-text">Logged in as: "<span className="all-caps">{currentUser[0]}</span>{currentUser.slice(1)}"</p>
+          <button onClick={logoutUser}>Logout</button>
+        </div>
+      ) : (
+        <p className="logged-out-text">Click the profile icon to log in.</p>
+      )}
 
       <input
         type="text"
@@ -112,17 +177,19 @@ function App() {
       <button onClick={editingIndex === null ? addGoal : updateGoal}>
         {editingIndex === null ? "Add Goal" : "Save Update"}
       </button>
-      
+
       {editingIndex !== null && (
-        <button onClick={() => {
-          setEditingIndex(null);
-          setGoalText("");
-        }}>
+        <button
+          onClick={() => {
+            setEditingIndex(null);
+            setGoalText("");
+          }}
+        >
           Cancel Edit
         </button>
       )}
-            
-      <p>{message}</p>
+
+      <p className="message">{message}</p>
 
       <h2>Your Goals</h2>
 
@@ -133,15 +200,14 @@ function App() {
           {goals.map((goal, index) => (
             <li key={index}>
               <button onClick={() => startEdit(index, goal)}>Edit</button>
-              -- {goal} --
+              <span>{goal}</span>
               <button onClick={() => deleteGoal(index)}>Delete</button>
             </li>
           ))}
         </ul>
-    )}
+      )}
     </div>
   );
 }
 
 export default App;
-
